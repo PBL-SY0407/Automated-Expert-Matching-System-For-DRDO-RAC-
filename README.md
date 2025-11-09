@@ -4,8 +4,6 @@
 
 An AI-assisted recruitment management platform that automates expert–candidate panel formation for DRDO's \*\*Recruitment and Assessment Centre (RAC)\*\*.  
 
-Developed using \*\*Base44 AI\*\*, \*\*React\*\*, and \*\*Tailwind CSS\*\*, this project enhances efficiency, transparency, and accuracy in expert panel allocation.
-
 
 
 ---
@@ -58,9 +56,9 @@ It provides an end-to-end solution — from candidate data management to automat
 
 | Frontend | React.js, Tailwind CSS |
 
-| Backend | Base44 AI (Auto-generated APIs) |
+| Backend | JavaScript/Node.js/APIs) |
 
-| Database | Base44 Entities |
+| Database | Created Entities |
 
 | Icons | Lucide React |
 
@@ -166,7 +164,7 @@ EXPERT MATCHING SYSTEM/
 
 
 
-\## 👨‍💻 Contributors
+\## 👨‍💻 Team Members
 
 \- ARYA KALBHOR
 
@@ -182,7 +180,5 @@ EXPERT MATCHING SYSTEM/
 
 
 
-\## 🧠 Purpose
 
-This project was developed as part of the PBL initiative to streamline expert identification for DRDO RAC evaluations.
 
