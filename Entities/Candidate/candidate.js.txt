@@ -1,0 +1,67 @@
+{
+  "name": "Candidate",
+  "type": "object",
+  "properties": {
+    "candidate_id": {
+      "type": "string",
+      "description": "Unique candidate identifier"
+    },
+    "name": {
+      "type": "string",
+      "description": "Candidate full name"
+    },
+    "branch": {
+      "type": "string",
+      "enum": [
+        "Electronics",
+        "Computer Science",
+        "Mechanical",
+        "Aerospace",
+        "Electrical",
+        "Civil",
+        "Chemical"
+      ],
+      "description": "Engineering branch"
+    },
+    "specialization": {
+      "type": "string",
+      "description": "Area of specialization"
+    },
+    "gate_score": {
+      "type": "number",
+      "description": "GATE score out of 100"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "General",
+        "OBC",
+        "SC",
+        "ST",
+        "EWS"
+      ],
+      "description": "Category"
+    },
+    "email": {
+      "type": "string",
+      "format": "email",
+      "description": "Contact email"
+    },
+    "recruitment_cycle_id": {
+      "type": "string",
+      "description": "Link to recruitment cycle"
+    },
+    "research_keywords": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Research interest keywords"
+    }
+  },
+  "required": [
+    "candidate_id",
+    "name",
+    "branch"
+  ]
+}

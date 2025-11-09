@@ -1,0 +1,88 @@
+{
+  "name": "Panel",
+  "type": "object",
+  "properties": {
+    "panel_id": {
+      "type": "string",
+      "description": "Unique panel identifier"
+    },
+    "candidate_id": {
+      "type": "string",
+      "description": "Link to candidate"
+    },
+    "candidate_name": {
+      "type": "string",
+      "description": "Candidate name"
+    },
+    "candidate_branch": {
+      "type": "string",
+      "description": "Candidate branch"
+    },
+    "candidate_specialization": {
+      "type": "string",
+      "description": "Candidate specialization"
+    },
+    "gate_score": {
+      "type": "number",
+      "description": "Candidate GATE score"
+    },
+    "recruitment_cycle_id": {
+      "type": "string",
+      "description": "Link to recruitment cycle"
+    },
+    "expert_drdo_id": {
+      "type": "string",
+      "description": "DRDO expert ID"
+    },
+    "expert_drdo_name": {
+      "type": "string",
+      "description": "DRDO expert name"
+    },
+    "expert_drdo_score": {
+      "type": "number",
+      "description": "Match score with DRDO expert"
+    },
+    "expert_academia_id": {
+      "type": "string",
+      "description": "Academia expert ID"
+    },
+    "expert_academia_name": {
+      "type": "string",
+      "description": "Academia expert name"
+    },
+    "expert_academia_score": {
+      "type": "number",
+      "description": "Match score with Academia expert"
+    },
+    "expert_industry_id": {
+      "type": "string",
+      "description": "Industry expert ID"
+    },
+    "expert_industry_name": {
+      "type": "string",
+      "description": "Industry expert name"
+    },
+    "expert_industry_score": {
+      "type": "number",
+      "description": "Match score with Industry expert"
+    },
+    "average_match_score": {
+      "type": "number",
+      "description": "Average match score across all experts"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "confirmed",
+        "completed"
+      ],
+      "default": "draft",
+      "description": "Panel status"
+    }
+  },
+  "required": [
+    "panel_id",
+    "candidate_id"
+  ]
+}

@@ -1,0 +1,262 @@
+
+import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { base44 } from "@/api/base44Client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { FileText, Download, Printer, FileSpreadsheet } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+export default function Reports() {
+  const [selectedCycle, setSelectedCycle] = useState("");
+
+  const { data: cycles = [] } = useQuery({
+    queryKey: ['recruitment-cycles'],
+    queryFn: () => base44.entities.RecruitmentCycle.list('-created_date'),
+    initialData: [],
+  });
+
+  const { data: panels = [] } = useQuery({
+    queryKey: ['panels'],
+    queryFn: () => base44.entities.Panel.list('-created_date'),
+    initialData: [],
+  });
+
+  const filteredPanels = selectedCycle
+    ? panels.filter(p => p.recruitment_cycle_id === selectedCycle)
+    : panels;
+
+  const selectedCycleData = cycles.find(c => c.id === selectedCycle);
+
+  const generatePDF = () => {
+    window.print();
+  };
+
+  const exportCSV = () => {
+    const headers = [
+      'Panel ID', 'Candidate Name', 'Branch', 'Specialization', 'GATE Score',
+      'DRDO Expert', 'DRDO Score', 'Academia Expert', 'Academia Score',
+      'Industry Expert', 'Industry Score', 'Average Score'
+    ];
+
+    const rows = filteredPanels.map(p => [
+      p.panel_id,
+      p.candidate_name,
+      p.candidate_branch,
+      p.candidate_specialization,
+      p.gate_score,
+      p.expert_drdo_name,
+      p.expert_drdo_score,
+      p.expert_academia_name,
+      p.expert_academia_score,
+      p.expert_industry_name,
+      p.expert_industry_score,
+      p.average_match_score
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `DRDO_Panel_Report_${selectedCycleData?.notification_id || 'All'}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="p-6 md:p-8 space-y-8 bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Generate Final Report</h1>
+          <p className="text-gray-500 mt-1">Export professional DRDO-format panel allocation reports</p>
+        </div>
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={exportCSV} className="gap-2">
+            <FileSpreadsheet className="w-4 h-4" />
+            Export CSV
+          </Button>
+          <Button onClick={generatePDF} className="bg-[#0A3D62] hover:bg-[#0A5080] gap-2">
+            <Printer className="w-4 h-4" />
+            Print
+          </Button>
+        </div>
+      </div>
+
+      <Card className="border-none shadow-lg print:hidden">
+        <CardHeader>
+          <CardTitle>Report Configuration</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <label className="font-medium">Select Recruitment Cycle</label>
+            <Select value={selectedCycle} onValueChange={setSelectedCycle}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Cycles" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={null}>All Cycles</SelectItem>
+                {cycles.map(cycle => (
+                  <SelectItem key={cycle.id} value={cycle.id}>
+                    {cycle.notification_id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="bg-white rounded-lg shadow-lg p-8 print:shadow-none">
+        <div className="border-b-4 border-[#0A3D62] pb-6 mb-6">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-gradient-to-br from-[#0A3D62] to-[#0A5080] rounded-xl flex items-center justify-center shadow-lg">
+                <div className="text-white font-bold text-2xl">D</div>
+              </div>
+              <div>
+                <h2 className="text-3xl font-bold text-[#0A3D62]">DRDO RAC</h2>
+                <p className="text-gray-600">Recruitment & Assessment Centre</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-sm text-gray-500">Report Generated</div>
+              <div className="font-semibold">{new Date().toLocaleDateString()}</div>
+            </div>
+          </div>
+          <div className="mt-6">
+            <h3 className="text-2xl font-bold text-gray-900">Expert Panel Allocation Report</h3>
+            {selectedCycleData && (
+              <p className="text-gray-600 mt-1">
+                Recruitment Cycle: {selectedCycleData.notification_id}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-4 gap-4 mb-8">
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm text-gray-500">Total Candidates</div>
+              <div className="text-2xl font-bold text-[#0A3D62]">{filteredPanels.length}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm text-gray-500">Experts Involved</div>
+              <div className="text-2xl font-bold text-purple-600">
+                {new Set([
+                  ...filteredPanels.map(p => p.expert_drdo_name),
+                  ...filteredPanels.map(p => p.expert_academia_name),
+                  ...filteredPanels.map(p => p.expert_industry_name)
+                ].filter(Boolean)).size}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm text-gray-500">Panels Formed</div>
+              <div className="text-2xl font-bold text-green-600">{filteredPanels.length}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm text-gray-500">Avg Match Score</div>
+              <div className="text-2xl font-bold text-orange-600">
+                {filteredPanels.length > 0
+                  ? Math.round(filteredPanels.reduce((sum, p) => sum + (p.average_match_score || 0), 0) / filteredPanels.length)
+                  : 0}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="mb-8">
+          <h4 className="text-xl font-bold text-gray-900 mb-4">Panel Allocation Details</h4>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Panel ID</TableHead>
+                  <TableHead>Candidate</TableHead>
+                  <TableHead>Branch</TableHead>
+                  <TableHead>GATE</TableHead>
+                  <TableHead>DRDO Expert</TableHead>
+                  <TableHead>Academia Expert</TableHead>
+                  <TableHead>Industry Expert</TableHead>
+                  <TableHead>Score</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredPanels.map((panel) => (
+                  <TableRow key={panel.id}>
+                    <TableCell className="font-medium text-xs">{panel.panel_id}</TableCell>
+                    <TableCell className="text-sm">{panel.candidate_name}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">{panel.candidate_branch}</Badge>
+                    </TableCell>
+                    <TableCell className="font-semibold">{panel.gate_score}</TableCell>
+                    <TableCell className="text-xs">
+                      <div>{panel.expert_drdo_name}</div>
+                      <div className="text-gray-500">({panel.expert_drdo_score})</div>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <div>{panel.expert_academia_name}</div>
+                      <div className="text-gray-500">({panel.expert_academia_score})</div>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <div>{panel.expert_industry_name}</div>
+                      <div className="text-gray-500">({panel.expert_industry_score})</div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={
+                        panel.average_match_score >= 70 ? 'bg-green-500' :
+                        panel.average_match_score >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                      }>
+                        {panel.average_match_score}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+
+        <div className="border-t pt-6 mt-8">
+          <div className="grid grid-cols-2 gap-8">
+            <div>
+              <h5 className="font-semibold text-gray-900 mb-2">Report Summary</h5>
+              <p className="text-sm text-gray-600">
+                This report contains the automated panel allocation results generated using a weighted
+                matching algorithm considering branch alignment, specialization, domain expertise, 
+                experience, and GATE scores.
+              </p>
+            </div>
+            <div>
+              <h5 className="font-semibold text-gray-900 mb-4">Verification</h5>
+              <div className="border-t border-gray-300 pt-2 mt-8">
+                <p className="text-sm text-gray-600">Verified by Recruitment Officer</p>
+                <p className="text-xs text-gray-500 mt-1">Date: _______________</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

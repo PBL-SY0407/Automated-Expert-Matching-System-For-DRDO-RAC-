@@ -1,0 +1,41 @@
+{
+  "name": "RecruitmentCycle",
+  "type": "object",
+  "properties": {
+    "notification_id": {
+      "type": "string",
+      "description": "Notification ID (e.g., Advt-156 / 2025)"
+    },
+    "application_period_start": {
+      "type": "string",
+      "format": "date",
+      "description": "Application period start date"
+    },
+    "application_period_end": {
+      "type": "string",
+      "format": "date",
+      "description": "Application period end date"
+    },
+    "description": {
+      "type": "string",
+      "description": "Description of the recruitment cycle"
+    },
+    "total_candidates": {
+      "type": "number",
+      "description": "Total number of candidates"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "completed",
+        "archived"
+      ],
+      "default": "active",
+      "description": "Status of recruitment cycle"
+    }
+  },
+  "required": [
+    "notification_id"
+  ]
+}

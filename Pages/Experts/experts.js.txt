@@ -1,0 +1,442 @@
+
+import React, { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { base44 } from "@/api/base44Client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { Users, Plus, Search, Download, Building2, GraduationCap, Factory } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Cell, Pie, PieChart, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+const COLORS = { DRDO: '#0A3D62', Academia: '#3498db', Industry: '#2ecc71' };
+const branches = ["Electronics", "Computer Science", "Mechanical", "Aerospace", "Electrical", "Civil", "Chemical"];
+
+export default function Experts() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    organization_type: 'DRDO',
+    organization_name: '',
+    branch: 'Electronics',
+    expertise: '',
+    designation: '',
+    experience_years: 0,
+    contact_email: '',
+    contact_phone: '',
+  });
+
+  const queryClient = useQueryClient();
+
+  const { data: experts = [] } = useQuery({
+    queryKey: ['experts'],
+    queryFn: async () => {
+      const data = await base44.entities.Expert.list();
+      return data.sort((a, b) => {
+        const idA = parseInt(a.expert_id?.replace('EXP-', '') || '0');
+        const idB = parseInt(b.expert_id?.replace('EXP-', '') || '0');
+        return idA - idB;
+      });
+    },
+    initialData: [],
+  });
+
+  const createExpertMutation = useMutation({
+    mutationFn: (data) => base44.entities.Expert.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['experts']);
+      setShowAddDialog(false);
+      setFormData({
+        name: '',
+        organization_type: 'DRDO',
+        organization_name: '',
+        branch: 'Electronics',
+        expertise: '',
+        designation: '',
+        experience_years: 0,
+        contact_email: '',
+        contact_phone: '',
+      });
+    },
+  });
+
+  const filteredExperts = experts.filter(expert =>
+    expert.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    expert.branch?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    expert.organization_type?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const orgDistribution = experts.reduce((acc, expert) => {
+    acc[expert.organization_type] = (acc[expert.organization_type] || 0) + 1;
+    return acc;
+  }, {});
+
+  const pieData = Object.entries(orgDistribution).map(([name, value]) => ({
+    name,
+    value,
+  }));
+
+  const getOrgIcon = (type) => {
+    switch(type) {
+      case 'DRDO': return <Building2 className="w-4 h-4" />;
+      case 'Academia': return <GraduationCap className="w-4 h-4" />;
+      case 'Industry': return <Factory className="w-4 h-4" />;
+      default: return <Users className="w-4 h-4" />;
+    }
+  };
+
+  const generateNextExpertId = () => {
+    if (experts.length === 0) return 'EXP-001';
+    
+    const existingIds = experts
+      .map(e => parseInt(e.expert_id?.replace('EXP-', '') || '0'))
+      .filter(id => !isNaN(id));
+    
+    const maxId = Math.max(...existingIds, 0);
+    const nextId = maxId + 1;
+    return `EXP-${String(nextId).padStart(3, '0')}`;
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const expertId = generateNextExpertId();
+    createExpertMutation.mutate({
+      ...formData,
+      expert_id: expertId
+    });
+  };
+
+  const handleExportCSV = () => {
+    const headers = [
+      'Expert ID',
+      'Name',
+      'Organization Type',
+      'Organization Name',
+      'Branch',
+      'Expertise',
+      'Designation',
+      'Experience (Years)',
+      'Email ID',
+      'Phone'
+    ];
+
+    const rows = experts.map(expert => [
+      expert.expert_id,
+      expert.name,
+      expert.organization_type,
+      expert.organization_name || '',
+      expert.branch,
+      expert.expertise || '',
+      expert.designation || '',
+      expert.experience_years || 0,
+      expert.contact_email || '',
+      expert.contact_phone || ''
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `DRDO_Expert_Database_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="p-6 md:p-8 space-y-8 bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Expert Panel Database</h1>
+          <p className="text-gray-500 mt-1">Maintain and manage expert records for panel formation</p>
+        </div>
+        <div className="flex gap-3">
+          <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+            <DialogTrigger asChild>
+              <Button className="bg-[#0A3D62] hover:bg-[#0A5080] gap-2">
+                <Plus className="w-4 h-4" />
+                Add Expert
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Add New Expert</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Full Name</Label>
+                    <Input
+                      value={formData.name}
+                      onChange={(e) => setFormData({...formData, name: e.target.value})}
+                      placeholder="Dr. John Doe"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Organization Type</Label>
+                    <Select
+                      value={formData.organization_type}
+                      onValueChange={(value) => setFormData({...formData, organization_type: value})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="DRDO">DRDO</SelectItem>
+                        <SelectItem value="Academia">Academia</SelectItem>
+                        <SelectItem value="Industry">Industry</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Organization Name</Label>
+                    <Input
+                      value={formData.organization_name}
+                      onChange={(e) => setFormData({...formData, organization_name: e.target.value})}
+                      placeholder="Organization"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Branch</Label>
+                    <Select
+                      value={formData.branch}
+                      onValueChange={(value) => setFormData({...formData, branch: value})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {branches.map(branch => (
+                          <SelectItem key={branch} value={branch}>{branch}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Expertise</Label>
+                    <Input
+                      value={formData.expertise}
+                      onChange={(e) => setFormData({...formData, expertise: e.target.value})}
+                      placeholder="Signal Processing"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Designation</Label>
+                    <Input
+                      value={formData.designation}
+                      onChange={(e) => setFormData({...formData, designation: e.target.value})}
+                      placeholder="Senior Scientist"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Experience (Years)</Label>
+                    <Input
+                      type="number"
+                      value={formData.experience_years}
+                      onChange={(e) => setFormData({...formData, experience_years: parseInt(e.target.value)})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Email ID</Label>
+                    <Input
+                      type="email"
+                      value={formData.contact_email}
+                      onChange={(e) => setFormData({...formData, contact_email: e.target.value})}
+                      placeholder="expert@example.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Phone</Label>
+                    <Input
+                      value={formData.contact_phone}
+                      onChange={(e) => setFormData({...formData, contact_phone: e.target.value})}
+                      placeholder="+91-XXXXXXXXXX"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3">
+                  <Button type="button" variant="outline" onClick={() => setShowAddDialog(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" className="bg-[#0A3D62] hover:bg-[#0A5080]">
+                    Add Expert
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+          <Button variant="outline" className="gap-2" onClick={handleExportCSV}>
+            <Download className="w-4 h-4" />
+            Export CSV
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card className="border-none shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Users className="w-5 h-5 text-[#0A3D62]" />
+              Total Experts
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-[#0A3D62]">{experts.length}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-none shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-[#0A3D62]" />
+              DRDO
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-[#0A3D62]">{orgDistribution.DRDO || 0}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-none shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <GraduationCap className="w-5 h-5 text-blue-600" />
+              Academia
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-blue-600">{orgDistribution.Academia || 0}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-none shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Factory className="w-5 h-5 text-green-600" />
+              Industry
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-green-600">{orgDistribution.Industry || 0}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {pieData.length > 0 && (
+        <Card className="border-none shadow-lg">
+          <CardHeader>
+            <CardTitle>Expert Distribution by Organization Type</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={100}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {pieData.map((entry) => (
+                    <Cell key={`cell-${entry.name}`} fill={COLORS[entry.name]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="border-none shadow-lg">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Expert Records</CardTitle>
+            <div className="relative w-64">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Search experts..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Expert ID</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Organization</TableHead>
+                  <TableHead>Branch</TableHead>
+                  <TableHead>Expertise</TableHead>
+                  <TableHead>Designation</TableHead>
+                  <TableHead>Experience</TableHead>
+                  <TableHead>Email ID</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredExperts.map((expert) => (
+                  <TableRow key={expert.id}>
+                    <TableCell className="font-medium">{expert.expert_id}</TableCell>
+                    <TableCell>{expert.name}</TableCell>
+                    <TableCell>
+                      <Badge className={`${
+                        expert.organization_type === 'DRDO' ? 'bg-[#0A3D62]' :
+                        expert.organization_type === 'Academia' ? 'bg-blue-600' :
+                        'bg-green-600'
+                      }`}>
+                        <span className="flex items-center gap-1">
+                          {getOrgIcon(expert.organization_type)}
+                          {expert.organization_type}
+                        </span>
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{expert.branch}</Badge>
+                    </TableCell>
+                    <TableCell>{expert.expertise}</TableCell>
+                    <TableCell className="text-sm">{expert.designation}</TableCell>
+                    <TableCell>{expert.experience_years} yrs</TableCell>
+                    <TableCell className="text-sm text-gray-500">{expert.contact_email}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

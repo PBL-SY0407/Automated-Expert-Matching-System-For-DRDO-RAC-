@@ -1,0 +1,458 @@
+import React, { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { base44 } from "@/api/base44Client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Database, Users, Briefcase, PieChart as PieChartIcon, Upload, Trash2, Eye } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Cell, Pie, PieChart, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+const COLORS = ['#0A3D62', '#3498db', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6', '#1abc9c'];
+
+export default function RecruitmentCycles() {
+  const [selectedCycle, setSelectedCycle] = useState(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = React.useRef(null);
+  const queryClient = useQueryClient();
+
+  const { data: cycles = [] } = useQuery({
+    queryKey: ['recruitment-cycles'],
+    queryFn: () => base44.entities.RecruitmentCycle.list('-created_date'),
+    initialData: [],
+  });
+
+  const { data: allCandidates = [] } = useQuery({
+    queryKey: ['candidates'],
+    queryFn: () => base44.entities.Candidate.list(),
+    initialData: [],
+  });
+
+  const deleteCycleMutation = useMutation({
+    mutationFn: async (cycleId) => {
+      // Delete all candidates for this cycle
+      const cycleCandidates = allCandidates.filter(c => c.recruitment_cycle_id === cycleId);
+      await Promise.all(cycleCandidates.map(c => base44.entities.Candidate.delete(c.id)));
+      // Delete the cycle itself
+      await base44.entities.RecruitmentCycle.delete(cycleId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['recruitment-cycles']);
+      queryClient.invalidateQueries(['candidates']);
+      setSelectedCycle(null);
+      toast.success('Recruitment cycle deleted successfully');
+    },
+    onError: () => {
+      toast.error('Failed to delete recruitment cycle');
+    },
+  });
+
+  const handleDeleteCycle = () => {
+    if (selectedCycle) {
+      deleteCycleMutation.mutate(selectedCycle.id);
+      setShowDeleteDialog(false);
+    }
+  };
+
+  const parseCSV = (csvText) => {
+    const lines = csvText.split('\n').filter(line => line.trim());
+    if (lines.length < 2) {
+      throw new Error('CSV file is empty or has no data rows');
+    }
+
+    // Parse header
+    const header = lines[0].split(',').map(h => h.trim());
+    
+    // Validate required headers
+    const requiredHeaders = ['Candidate_ID', 'Name', 'Domain', 'Panel', 'Gate_Score', 'Category', 'Email'];
+    const hasAllHeaders = requiredHeaders.every(rh => header.includes(rh));
+    
+    if (!hasAllHeaders) {
+      throw new Error(`Invalid CSV format. Required headers: ${requiredHeaders.join(', ')}`);
+    }
+
+    // Parse data rows
+    const candidates = [];
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue; // Skip blank lines
+
+      // Handle CSV with potential commas in quoted fields
+      const values = [];
+      let currentValue = '';
+      let insideQuotes = false;
+      
+      for (let char of line) {
+        if (char === '"') {
+          insideQuotes = !insideQuotes;
+        } else if (char === ',' && !insideQuotes) {
+          values.push(currentValue.trim());
+          currentValue = '';
+        } else {
+          currentValue += char;
+        }
+      }
+      values.push(currentValue.trim()); // Push last value
+
+      if (values.length !== header.length) continue; // Skip invalid rows
+
+      const candidate = {};
+      header.forEach((key, index) => {
+        candidate[key] = values[index].replace(/^"|"$/g, ''); // Remove quotes
+      });
+
+      // Map to our data model
+      const mappedCandidate = {
+        candidate_id: candidate.Candidate_ID,
+        name: candidate.Name,
+        branch: candidate.Domain, // Map Domain to branch
+        specialization: candidate.Panel, // Map Panel to specialization
+        gate_score: parseFloat(candidate.Gate_Score) || 0,
+        category: candidate.Category,
+        email: candidate.Email,
+      };
+
+      // Validate essential fields
+      if (mappedCandidate.candidate_id && mappedCandidate.name) {
+        candidates.push(mappedCandidate);
+      }
+    }
+
+    return candidates;
+  };
+
+  const extractCycleNameFromFilename = (filename) => {
+    // Remove .csv extension
+    const nameWithoutExt = filename.replace(/\.csv$/i, '');
+    
+    // Replace underscores with space and forward slash
+    // e.g., "Advt-157_2026.csv" -> "Advt-157 / 2026"
+    const formatted = nameWithoutExt.replace(/_/g, ' / ');
+    
+    return formatted;
+  };
+
+  const handleImportCSV = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.csv')) {
+      toast.error('Please upload a CSV file');
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      // Read file content
+      const text = await file.text();
+      
+      // Parse CSV
+      const candidates = parseCSV(text);
+
+      if (candidates.length === 0) {
+        toast.error('❌ No valid candidate records found in CSV file');
+        setIsUploading(false);
+        return;
+      }
+
+      // Extract cycle name from filename
+      const cycleName = extractCycleNameFromFilename(file.name);
+      
+      // Create new recruitment cycle
+      const currentDate = new Date();
+      const cycleData = {
+        notification_id: cycleName,
+        application_period_start: currentDate.toISOString().split('T')[0],
+        application_period_end: new Date(currentDate.getTime() + 30*24*60*60*1000).toISOString().split('T')[0],
+        description: `Imported from ${file.name}`,
+        total_candidates: candidates.length,
+        status: 'active'
+      };
+
+      const newCycle = await base44.entities.RecruitmentCycle.create(cycleData);
+
+      // Add recruitment cycle ID to each candidate
+      const candidatesWithCycleId = candidates.map(c => ({
+        ...c,
+        recruitment_cycle_id: newCycle.id
+      }));
+
+      // Bulk create candidates
+      await base44.entities.Candidate.bulkCreate(candidatesWithCycleId);
+
+      // Refresh data
+      queryClient.invalidateQueries(['candidates']);
+      queryClient.invalidateQueries(['recruitment-cycles']);
+
+      // Select the newly created cycle
+      setSelectedCycle(newCycle);
+
+      toast.success(`✅ Recruitment Cycle Imported Successfully: ${cycleName} created.`);
+    } catch (error) {
+      console.error('Import error:', error);
+      toast.error(`❌ ${error.message || 'Invalid file format or missing headers. Please use the correct CSV structure.'}`);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const candidates = selectedCycle 
+    ? allCandidates.filter(c => c.recruitment_cycle_id === selectedCycle.id)
+    : [];
+
+  const branchDistribution = candidates.reduce((acc, candidate) => {
+    acc[candidate.branch] = (acc[candidate.branch] || 0) + 1;
+    return acc;
+  }, {});
+
+  const pieData = Object.entries(branchDistribution).map(([name, value]) => ({
+    name,
+    value,
+  }));
+
+  return (
+    <div className="p-6 md:p-8 space-y-8 bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Candidate Data Repository</h1>
+          <p className="text-gray-500 mt-1">Manage and visualize recruitment cycle datasets</p>
+        </div>
+        <div className="flex gap-3">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            onChange={handleImportCSV}
+            className="hidden"
+          />
+          <Button 
+            variant="outline" 
+            className="gap-2"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+          >
+            <Upload className="w-4 h-4" />
+            {isUploading ? 'Importing...' : 'Import CSV'}
+          </Button>
+          <Button 
+            variant="outline" 
+            className="gap-2 hover:bg-red-50 hover:text-red-600 hover:border-red-300"
+            onClick={() => setShowDeleteDialog(true)}
+            disabled={!selectedCycle}
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete CSV File
+          </Button>
+        </div>
+      </div>
+
+      <Card className="border-none shadow-lg">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Database className="w-5 h-5" />
+            Select Recruitment Cycle
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {cycles.map((cycle, index) => (
+              <button
+                key={cycle.id}
+                onClick={() => setSelectedCycle(cycle)}
+                className={`w-full p-4 rounded-lg border-2 transition-all duration-200 text-left ${
+                  selectedCycle?.id === cycle.id
+                    ? 'border-[#0A3D62] bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-white ${
+                      index === 0 ? 'bg-gradient-to-br from-green-500 to-green-600' : 'bg-gradient-to-br from-[#0A3D62] to-[#0A5080]'
+                    }`}>
+                      {index + 1}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900 flex items-center gap-2">
+                        {cycle.notification_id}
+                        {index === 0 && <Badge className="bg-green-500">Latest</Badge>}
+                      </div>
+                      <p className="text-sm text-gray-500">
+                        {new Date(cycle.application_period_start).toLocaleDateString()} - {new Date(cycle.application_period_end).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-[#0A3D62]">{cycle.total_candidates}</div>
+                      <div className="text-xs text-gray-500">Candidates</div>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600 mt-2">{cycle.description}</p>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {selectedCycle && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="border-none shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Users className="w-5 h-5 text-[#0A3D62]" />
+                  Total Candidates
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-[#0A3D62]">{candidates.length}</div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Briefcase className="w-5 h-5 text-purple-600" />
+                  Branches
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-purple-600">
+                  {Object.keys(branchDistribution).length}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <PieChartIcon className="w-5 h-5 text-green-600" />
+                  Avg GATE Score
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-green-600">
+                  {candidates.length > 0
+                    ? (candidates.reduce((sum, c) => sum + (c.gate_score || 0), 0) / candidates.length).toFixed(1)
+                    : 0}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {pieData.length > 0 && (
+            <Card className="border-none shadow-lg">
+              <CardHeader>
+                <CardTitle>Branch Distribution</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card className="border-none shadow-lg">
+            <CardHeader>
+              <CardTitle>Candidate Table Preview</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Candidate ID</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Branch</TableHead>
+                      <TableHead>Specialization</TableHead>
+                      <TableHead>GATE Score</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Email</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {candidates.slice(0, 10).map((candidate) => (
+                      <TableRow key={candidate.id}>
+                        <TableCell className="font-medium">{candidate.candidate_id}</TableCell>
+                        <TableCell>{candidate.name}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{candidate.branch}</Badge>
+                        </TableCell>
+                        <TableCell>{candidate.specialization}</TableCell>
+                        <TableCell className="font-semibold">{candidate.gate_score}</TableCell>
+                        <TableCell>{candidate.category}</TableCell>
+                        <TableCell className="text-sm text-gray-500">{candidate.email}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              {candidates.length > 10 && (
+                <div className="mt-4 text-center text-sm text-gray-500">
+                  Showing 10 of {candidates.length} candidates
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Recruitment Cycle?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the dataset for "{selectedCycle?.notification_id}"?
+              This will permanently delete {candidates.length} candidate records. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteCycle}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete Dataset
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

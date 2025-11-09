@@ -1,0 +1,265 @@
+import React, { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { base44 } from "@/api/base44Client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BarChart3, Users, GitMerge, TrendingUp, RefreshCw } from "lucide-react";
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell
+} from "recharts";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+const COLORS = ['#0A3D62', '#3498db', '#2ecc71'];
+
+export default function Analytics() {
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const queryClient = useQueryClient();
+
+  const { data: panels = [] } = useQuery({
+    queryKey: ['panels'],
+    queryFn: () => base44.entities.Panel.list('-created_date'),
+    initialData: [],
+  });
+
+  const { data: experts = [] } = useQuery({
+    queryKey: ['experts'],
+    queryFn: () => base44.entities.Expert.list(),
+    initialData: [],
+  });
+
+  const deletePanelsMutation = useMutation({
+    mutationFn: async () => {
+      const deletePromises = panels.map(panel => 
+        base44.entities.Panel.delete(panel.id)
+      );
+      await Promise.all(deletePromises);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['panels']);
+      toast.success('All panels have been reset successfully');
+      setIsResetting(false);
+    },
+    onError: () => {
+      toast.error('Failed to reset panels');
+      setIsResetting(false);
+    },
+  });
+
+  const handleResetPanels = () => {
+    setIsResetting(true);
+    deletePanelsMutation.mutate();
+    setShowResetDialog(false);
+  };
+
+  // Expert workload data
+  const expertWorkload = {};
+  panels.forEach(panel => {
+    if (panel.expert_drdo_name) {
+      expertWorkload[panel.expert_drdo_name] = (expertWorkload[panel.expert_drdo_name] || 0) + 1;
+    }
+    if (panel.expert_academia_name) {
+      expertWorkload[panel.expert_academia_name] = (expertWorkload[panel.expert_academia_name] || 0) + 1;
+    }
+    if (panel.expert_industry_name) {
+      expertWorkload[panel.expert_industry_name] = (expertWorkload[panel.expert_industry_name] || 0) + 1;
+    }
+  });
+
+  const workloadData = Object.entries(expertWorkload)
+    .map(([name, count]) => ({ name, panels: count }))
+    .sort((a, b) => b.panels - a.panels)
+    .slice(0, 15);
+
+  // Organization distribution
+  const orgDistribution = [
+    { name: 'DRDO', value: panels.filter(p => p.expert_drdo_name).length },
+    { name: 'Academia', value: panels.filter(p => p.expert_academia_name).length },
+    { name: 'Industry', value: panels.filter(p => p.expert_industry_name).length },
+  ];
+
+  return (
+    <div className="p-6 md:p-8 space-y-8 bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowResetDialog(true)}
+            disabled={panels.length === 0 || isResetting}
+            className="w-12 h-12 bg-gradient-to-br from-[#0A3D62] to-[#0A5080] rounded-xl flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed group"
+            title="Reset All Panels"
+          >
+            <BarChart3 className={`w-6 h-6 text-white ${isResetting ? 'animate-pulse' : 'group-hover:rotate-12 transition-transform'}`} />
+          </button>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Panel Analytics Dashboard</h1>
+            <p className="text-gray-500">Interactive insights on expert workload and matching efficiency</p>
+          </div>
+        </div>
+        
+        {panels.length > 0 && (
+          <Button
+            onClick={() => setShowResetDialog(true)}
+            variant="outline"
+            disabled={isResetting}
+            className="gap-2 hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-all"
+          >
+            <RefreshCw className={`w-4 h-4 ${isResetting ? 'animate-spin' : ''}`} />
+            Reset All Panels
+          </Button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card className="border-none shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Users className="w-5 h-5 text-[#0A3D62]" />
+              Candidates Processed
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-4xl font-bold text-[#0A3D62]">{panels.length}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-none shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Users className="w-5 h-5 text-purple-600" />
+              Experts Involved
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-4xl font-bold text-purple-600">
+              {Object.keys(expertWorkload).length}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-none shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <GitMerge className="w-5 h-5 text-green-600" />
+              Panels Formed
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-4xl font-bold text-green-600">{panels.length}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-none shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-orange-600" />
+              Avg Match Score
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-4xl font-bold text-orange-600">
+              {panels.length > 0 
+                ? Math.round(panels.reduce((sum, p) => sum + (p.average_match_score || 0), 0) / panels.length)
+                : 0}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="border-none shadow-lg lg:col-span-2 hover:shadow-xl transition-shadow duration-300">
+          <CardHeader>
+            <CardTitle>Expert Workload Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={400}>
+              <BarChart data={workloadData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="name" 
+                  angle={-45}
+                  textAnchor="end"
+                  height={120}
+                  interval={0}
+                  tick={{ fontSize: 11 }}
+                />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="panels" fill="#0A3D62" name="Candidate Count" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card className="border-none shadow-lg hover:shadow-xl transition-shadow duration-300">
+          <CardHeader>
+            <CardTitle>Expert Distribution by Organization</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={400}>
+              <PieChart>
+                <Pie
+                  data={orgDistribution}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={120}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {orgDistribution.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset All Panels?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action will permanently delete all {panels.length} formed panels. This cannot be undone.
+              You will need to run the matching algorithm again to generate new panels.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleResetPanels}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Reset All Panels
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

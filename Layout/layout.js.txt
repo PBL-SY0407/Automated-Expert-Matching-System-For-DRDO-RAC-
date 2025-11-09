@@ -1,0 +1,211 @@
+import React, { useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import { 
+  LayoutDashboard, 
+  Database, 
+  Users, 
+  GitMerge, 
+  BarChart3, 
+  FileText,
+  LogOut,
+  User
+} from "lucide-react";
+import { base44 } from "@/api/base44Client";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarHeader,
+  SidebarFooter,
+  SidebarProvider,
+} from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+const navigationItems = [
+  {
+    title: "Dashboard",
+    url: createPageUrl("Dashboard"),
+    icon: LayoutDashboard,
+  },
+  {
+    title: "Recruitment Cycles",
+    url: createPageUrl("RecruitmentCycles"),
+    icon: Database,
+  },
+  {
+    title: "Expert Database",
+    url: createPageUrl("Experts"),
+    icon: Users,
+  },
+  {
+    title: "Matching Engine",
+    url: createPageUrl("Matching"),
+    icon: GitMerge,
+  },
+  {
+    title: "Analytics",
+    url: createPageUrl("Analytics"),
+    icon: BarChart3,
+  },
+  {
+    title: "Reports",
+    url: createPageUrl("Reports"),
+    icon: FileText,
+  },
+];
+
+export default function Layout({ children, currentPageName }) {
+  const location = useLocation();
+
+  const { data: user } = useQuery({
+    queryKey: ['current-user'],
+    queryFn: () => base44.auth.me(),
+    initialData: null,
+  });
+
+  const handleLogout = () => {
+    base44.auth.logout();
+  };
+
+  const getInitials = (email) => {
+    if (!email) return 'G';
+    return email.charAt(0).toUpperCase();
+  };
+
+  return (
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full bg-gradient-to-br from-gray-50 via-gray-50 to-blue-50">
+        <Sidebar className="border-r border-gray-200 bg-white shadow-sm">
+          <SidebarHeader className="border-b p-4 border-gray-200">
+            <div className="flex items-center gap-3">
+              <img 
+                src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/690f176fbb7b0f09aa774ca8/05dbebe00_Gemini_Generated_Image_44dgeh44dgeh44dg.png" 
+                alt="DRDO Logo" 
+                className="w-10 h-10 object-contain"
+              />
+              <div>
+                <h2 className="font-bold text-sm text-gray-900">DRDO RAC</h2>
+                <p className="text-xs text-gray-500">Expert Matching Portal</p>
+              </div>
+            </div>
+          </SidebarHeader>
+          
+          <SidebarContent className="p-2">
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider px-2 py-2 text-gray-500">
+                Navigation
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {navigationItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton 
+                        asChild 
+                        className={`mb-1 rounded-lg transition-all duration-200 ${
+                          location.pathname === item.url 
+                            ? 'bg-[#0A3D62] text-white hover:bg-[#0A3D62] shadow-md' 
+                            : 'hover:bg-blue-50 hover:text-[#0A3D62]'
+                        }`}
+                      >
+                        <Link to={item.url} className="flex items-center gap-3 px-3 py-2">
+                          <item.icon className="w-4 h-4" />
+                          <span className="font-medium text-sm">{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
+
+          <SidebarFooter className="border-t p-4 border-gray-200">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 bg-red-50 text-red-600 hover:bg-red-100 hover:shadow-sm"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="text-sm font-medium">Logout</span>
+            </button>
+          </SidebarFooter>
+        </Sidebar>
+
+        <main className="flex-1 flex flex-col overflow-hidden">
+          <header className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center shadow-sm">
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold text-gray-800">
+                {navigationItems.find(item => item.url === location.pathname)?.title || 'DRDO RAC Portal'}
+              </h2>
+            </div>
+            
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger className="flex items-center gap-3 hover:bg-gray-50 px-3 py-2 rounded-lg transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0A3D62] focus:ring-opacity-50">
+                  <div className="text-right hidden md:block">
+                    <div className="text-sm font-semibold text-gray-900">{user.full_name || 'Admin User'}</div>
+                    <div className="text-xs text-gray-500">{user.email}</div>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#0A3D62] to-[#0A5080] flex items-center justify-center text-white font-semibold shadow-lg ring-2 ring-white">
+                    {getInitials(user.email)}
+                  </div>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64 shadow-xl border-gray-200">
+                  <DropdownMenuLabel className="pb-3">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-semibold text-gray-900">{user.full_name || 'Admin User'}</p>
+                      <p className="text-xs text-gray-500 break-all">{user.email}</p>
+                      {user.role && (
+                        <span className="text-xs text-[#0A3D62] font-semibold uppercase tracking-wide bg-blue-50 px-2 py-1 rounded-md inline-block mt-1">
+                          {user.role}
+                        </span>
+                      )}
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onClick={handleLogout} 
+                    className="cursor-pointer text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors py-2"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    <span className="font-medium">Logout</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100">
+                <User className="w-4 h-4 text-gray-500" />
+                <span className="text-sm text-gray-600">Guest</span>
+              </div>
+            )}
+          </header>
+          
+          <div className="flex-1 overflow-auto">
+            {children}
+          </div>
+        </main>
+      </div>
+
+      <style>{`
+        :root {
+          --drdo-blue: #0A3D62;
+          --drdo-blue-light: #0A5080;
+          --drdo-blue-dark: #082D4A;
+        }
+      `}</style>
+    </SidebarProvider>
+  );
+}

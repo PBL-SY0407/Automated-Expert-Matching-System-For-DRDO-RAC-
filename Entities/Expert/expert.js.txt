@@ -1,0 +1,79 @@
+{
+  "name": "Expert",
+  "type": "object",
+  "properties": {
+    "expert_id": {
+      "type": "string",
+      "description": "Unique expert identifier"
+    },
+    "name": {
+      "type": "string",
+      "description": "Expert full name"
+    },
+    "organization_type": {
+      "type": "string",
+      "enum": [
+        "DRDO",
+        "Academia",
+        "Industry"
+      ],
+      "description": "Organization type"
+    },
+    "organization_name": {
+      "type": "string",
+      "description": "Name of organization"
+    },
+    "branch": {
+      "type": "string",
+      "enum": [
+        "Electronics",
+        "Computer Science",
+        "Mechanical",
+        "Aerospace",
+        "Electrical",
+        "Civil",
+        "Chemical"
+      ],
+      "description": "Engineering branch"
+    },
+    "expertise": {
+      "type": "string",
+      "description": "Area of expertise"
+    },
+    "designation": {
+      "type": "string",
+      "description": "Job designation"
+    },
+    "experience_years": {
+      "type": "number",
+      "description": "Years of experience"
+    },
+    "contact_email": {
+      "type": "string",
+      "format": "email",
+      "description": "Contact email"
+    },
+    "contact_phone": {
+      "type": "string",
+      "description": "Contact phone"
+    },
+    "domain_keywords": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Domain expertise keywords"
+    },
+    "current_panel_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Current number of panels assigned"
+    }
+  },
+  "required": [
+    "expert_id",
+    "name",
+    "organization_type",
+    "branch"
+  ]
+}
