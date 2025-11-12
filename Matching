@@ -1,0 +1,113 @@
+from flask import Flask, render_template, request, redirect
+from database import db, Project, Expert
+
+app = Flask(_name_)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///drdo.db'
+app.config['SECRET_KEY'] = 'drdo_secret_key'
+
+db.init_app(app)
+
+# Simple admin credentials
+ADMIN_USERNAME = "admin_drdo"
+ADMIN_PASSWORD = "drdo@2024"
+
+# Create tables
+with app.app_context():
+    db.create_all()
+    # Add sample experts if none exist
+    if Expert.query.count() == 0:
+        sample_experts = [
+            Expert(name="Dr. Raj Sharma", expertise="Aerospace", experience_years=15, interview_date="15-01-2024", security_clearance="top_secret", false_positive=False),
+            Expert(name="Prof. Priya Singh", expertise="AI", experience_years=12, interview_date="20-02-2024", security_clearance="secret", false_positive=False),
+            Expert(name="Col. Verma", expertise="Defense", experience_years=25, interview_date="10-03-2024", security_clearance="top_secret", false_positive=True),
+            Expert(name="Dr. Arjun Mehta", expertise="Cybersecurity", experience_years=8, interview_date="05-01-2024", security_clearance="secret", false_positive=False),
+            Expert(name="Ms. Anjali Reddy", expertise="Electronics", experience_years=10, interview_date="18-02-2024", security_clearance="confidential", false_positive=False),
+            Expert(name="Dr. Sameer Joshi", expertise="Robotics", experience_years=18, interview_date="22-03-2024", security_clearance="top_secret", false_positive=False),
+            Expert(name="Prof. Neha Kapoor", expertise="AI", experience_years=14, interview_date="30-01-2024", security_clearance="secret", false_positive=True),
+            Expert(name="Mr. Vikram Malhotra", expertise="Aerospace", experience_years=22, interview_date="12-02-2024", security_clearance="top_secret", false_positive=False),
+            Expert(name="Dr. Sneha Patel", expertise="Cybersecurity", experience_years=9, interview_date="25-03-2024", security_clearance="secret", false_positive=False),
+            Expert(name="Col. Rajesh Kumar", expertise="Defense", experience_years=30, interview_date="08-01-2024", security_clearance="top_secret", false_positive=False),
+            Expert(name="Dr. Priyanka Das", expertise="Electronics", experience_years=11, interview_date="14-02-2024", security_clearance="confidential", false_positive=False),
+            Expert(name="Mr. Rohan Agarwal", expertise="Robotics", experience_years=7, interview_date="19-03-2024", security_clearance="secret", false_positive=True),
+            Expert(name="Dr. Ankit Sharma", expertise="Aerospace", experience_years=16, interview_date="03-01-2024", security_clearance="top_secret", false_positive=False),
+            Expert(name="Ms. Pooja Gupta", expertise="AI", experience_years=13, interview_date="28-02-2024", security_clearance="secret", false_positive=False),
+            Expert(name="Prof. Rahul Singh", expertise="Cybersecurity", experience_years=20, interview_date="11-03-2024", security_clearance="top_secret", false_positive=False),
+            Expert(name="Dr. Nisha Verma", expertise="Electronics", experience_years=12, interview_date="06-01-2024", security_clearance="confidential", false_positive=False),
+            Expert(name="Mr. Karan Malhotra", expertise="Robotics", experience_years=9, interview_date="24-02-2024", security_clearance="secret", false_positive=True),
+            Expert(name="Dr. Sanjay Rao", expertise="Aerospace", experience_years=24, interview_date="17-03-2024", security_clearance="top_secret", false_positive=False),
+            Expert(name="Ms. Divya Iyer", expertise="AI", experience_years=10, interview_date="02-01-2024", security_clearance="secret", false_positive=False),
+            Expert(name="Prof. Amit Khanna", expertise="Cybersecurity", experience_years=17, interview_date="26-02-2024", security_clearance="top_secret", false_positive=False),
+        ]
+        db.session.add_all(sample_experts)
+        db.session.commit()
+
+@app.route('/')
+def home():
+    return redirect('/login')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        
+        if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+            return redirect('/dashboard')
+        else:
+            return "Login failed! Try: admin_drdo / drdo@2024"
+    
+    return render_template('login.html')
+
+@app.route('/dashboard')
+def dashboard():
+    return render_template('home.html')
+
+@app.route('/add_expert', methods=['GET', 'POST'])
+def add_expert():
+    if request.method == 'POST':
+        name = request.form['name']
+        expertise = request.form['expertise']
+        experience = request.form['experience']
+        interview_date = request.form['interview_date']
+        security_clearance = request.form['security_clearance']
+        false_positive = 'false_positive' in request.form
+        
+        new_expert = Expert(
+            name=name,
+            expertise=expertise,
+            experience_years=experience,
+            interview_date=interview_date,
+            security_clearance=security_clearance,
+            false_positive=false_positive
+        )
+        db.session.add(new_expert)
+        db.session.commit()
+        
+        return 'Expert added successfully! <a href="/dashboard">Back to Dashboard</a>'
+    
+    return render_template('add_expert.html')
+
+@app.route('/experts')
+def view_experts():
+    experts = Expert.query.all()
+    return render_template('view_experts.html', experts=experts)
+
+@app.route('/matching', methods=['GET', 'POST'])
+def expert_matching():
+    if request.method == 'POST':
+        specialization = request.form['specialization']
+        min_experience = int(request.form['min_experience'])
+        
+        # Find experts matching the candidate's specialization
+        matches = Expert.query.filter(
+            Expert.expertise == specialization,
+            Expert.experience_years >= min_experience,
+            Expert.false_positive == False  # Exclude false positives
+        ).all()
+        
+        return render_template('matching.html', matches=matches)
+    
+    return render_template('matching.html', matches=None)
+
+if _name_ == '_main_':
+    app.run(debug=True)
